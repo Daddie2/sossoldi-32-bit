@@ -129,18 +129,14 @@ if not exist .git (
 echo.
 
 echo [10/10] Pubblico la release con l'APK su GitHub...
-if not "%PUSHED%"=="1" (
-    echo Nessuna nuova modifica pubblicata, salto la creazione della release.
+if not defined GITHUB_TOKEN (
+    echo ATTENZIONE: variabile d'ambiente GITHUB_TOKEN non impostata, salto la creazione della release.
+    echo             Impostala una tantum con: setx GITHUB_TOKEN "il-tuo-personal-access-token"
+    echo             ^(poi riapri questo terminale/riavvia il bat^)
 ) else (
-    if not defined GITHUB_TOKEN (
-        echo ATTENZIONE: variabile d'ambiente GITHUB_TOKEN non impostata, salto la creazione della release.
-        echo             Impostala una tantum con: setx GITHUB_TOKEN "il-tuo-personal-access-token"
-        echo             ^(poi riapri questo terminale/riavvia il bat^)
-    ) else (
-        powershell -NoProfile -ExecutionPolicy Bypass -File create_github_release.ps1
-        if errorlevel 1 (
-            echo ATTENZIONE: creazione della release fallita. Controlla il token e il remote ^(git remote -v^).
-        )
+    powershell -NoProfile -ExecutionPolicy Bypass -File create_github_release.ps1
+    if errorlevel 1 (
+        echo ATTENZIONE: creazione della release fallita. Controlla il token e il remote ^(git remote -v^).
     )
 )
 
