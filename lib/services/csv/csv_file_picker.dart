@@ -1,0 +1,177 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+
+import '../../ui/snack_bars/snack_bar.dart';
+import '../../ui/device.dart';
+
+class CSVFilePicker {
+  // Request storage permission based on Android version
+  static Future<bool> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      int sdkInt = androidInfo.version.sdkInt;
+
+      if (sdkInt <= 32) {
+        final status = await Permission.storage.request();
+        return status.isGranted;
+      }
+    }
+    return true;
+  }
+
+  // Pick CSV file for import
+  static Future<File?> pickCSVFile(BuildContext context) async {
+    bool permissionGranted = await _requestStoragePermission();
+    if (!permissionGranted) {
+      if (context.mounted) {
+        showSnackBar(context, message: 'Storage permission is required');
+      }
+      return null;
+    }
+
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        return File(result.files.first.path!);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showSnackBar(context, message: 'Error picking file: ${e.toString()}');
+      }
+    }
+    return null;
+  }
+
+  // Share exported CSV file
+  static Future<void> saveCSVFile(String csv, BuildContext context) async {
+    try {
+      int sdkInt = 0;
+      if (Platform.isAndroid) {
+        final androidInfo = await DeviceInfoPlugin().androidInfo;
+        sdkInt = androidInfo.version.sdkInt;
+      }
+
+      String filePath;
+
+      if (Platform.isAndroid && sdkInt <= 29) {
+        // Su Android <=29 (o ROM con SAF/DocumentsUI rotto) scriviamo
+        // direttamente su Download, bypassando file_picker.
+        bool permissionGranted = await _requestStoragePermission();
+        if (!permissionGranted) {
+          if (context.mounted) {
+            showSnackBar(context, message: 'Storage permission is required');
+          }
+          return;
+        }
+
+        final downloadsDir = Directory('/storage/emulated/0/Download');
+        if (!await downloadsDir.exists()) {
+          await downloadsDir.create(recursive: true);
+        }
+
+        final String timestamp =
+            DateTime.now().millisecondsSinceEpoch.toString();
+        filePath = join(downloadsDir.path, 'sossoldi_export_$timestamp.csv');
+      } else {
+        // Android 10+ / altre piattaforme: comportamento originale con SAF
+        String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+        if (selectedDirectory == null) {
+          // User canceled the picker
+          return;
+        }
+
+        final String timestamp =
+            DateTime.now().millisecondsSinceEpoch.toString();
+        filePath = join(selectedDirectory, 'sossoldi_export_$timestamp.csv');
+      }
+
+      final file = await File(filePath).writeAsString(csv);
+
+      if (context.mounted) {
+        showSnackBar(context, message: 'File saved to: ${file.path}');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        String errorMessage =
+            'Cannot save the file here, please create or select a folder in Downloads or Documents. Error: ${e.toString()}';
+
+        showSnackBar(context, message: errorMessage);
+      }
+    }
+  }
+
+  // Show loading dialog
+  static void showLoading(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          elevation: 8,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Sizes.borderRadius),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: Sizes.lg,
+              horizontal: Sizes.xl,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: Sizes.lg),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Hide loading dialog
+  static void hideLoading(BuildContext context) {
+    Navigator.of(context).pop();
+  }
+
+  // Show success message
+  static Future<void> showSuccess(BuildContext context, String message) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Success'),
+          content: Text(message),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Sizes.borderRadius),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
