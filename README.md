@@ -63,4 +63,8 @@ If you don't want to build the APK yourself, check the [Releases](../../releases
 
 ## License
 
+<<<<<<< HEAD
 Like the original project, this fork is distributed under the MIT license (see `LICENSE`).
+=======
+Like the original project, this fork is distributed under the MIT license (see `LICENSE`).
+>>>>>>> c9cf284769d5a11abbb2f9c13004090b7321fabc
