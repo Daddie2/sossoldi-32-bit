@@ -52,47 +52,20 @@ class CSVFilePicker {
   }
 
   // Share exported CSV file
+  // Chiede sempre la cartella tramite il selettore (SAF), anche su Android
+  // <=29 / ROM datate, invece di scrivere automaticamente in Download.
   static Future<void> saveCSVFile(String csv, BuildContext context) async {
     try {
-      int sdkInt = 0;
-      if (Platform.isAndroid) {
-        final androidInfo = await DeviceInfoPlugin().androidInfo;
-        sdkInt = androidInfo.version.sdkInt;
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      if (selectedDirectory == null) {
+        // User canceled the picker
+        return;
       }
 
-      String filePath;
-
-      if (Platform.isAndroid && sdkInt <= 29) {
-        // Su Android <=29 (o ROM con SAF/DocumentsUI rotto) scriviamo
-        // direttamente su Download, bypassando file_picker.
-        bool permissionGranted = await _requestStoragePermission();
-        if (!permissionGranted) {
-          if (context.mounted) {
-            showSnackBar(context, message: 'Storage permission is required');
-          }
-          return;
-        }
-
-        final downloadsDir = Directory('/storage/emulated/0/Download');
-        if (!await downloadsDir.exists()) {
-          await downloadsDir.create(recursive: true);
-        }
-
-        final String timestamp =
-            DateTime.now().millisecondsSinceEpoch.toString();
-        filePath = join(downloadsDir.path, 'sossoldi_export_$timestamp.csv');
-      } else {
-        // Android 10+ / altre piattaforme: comportamento originale con SAF
-        String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-        if (selectedDirectory == null) {
-          // User canceled the picker
-          return;
-        }
-
-        final String timestamp =
-            DateTime.now().millisecondsSinceEpoch.toString();
-        filePath = join(selectedDirectory, 'sossoldi_export_$timestamp.csv');
-      }
+      final String timestamp =
+          DateTime.now().millisecondsSinceEpoch.toString();
+      final String filePath =
+          join(selectedDirectory, 'sossoldi_export_$timestamp.csv');
 
       final file = await File(filePath).writeAsString(csv);
 

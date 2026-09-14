@@ -1,66 +1,66 @@
 # Sossoldi 32-bit
 
-> 🍴 **Questo è un fork non ufficiale di [RIP-Comm/sossoldi](https://github.com/RIP-Comm/sossoldi)**, con lo scopo specifico di far compilare e girare l'app su dispositivi Android datati a **32 bit (armeabi-v7a)**, come tablet con Android 7.x (API 24) che le versioni moderne di Flutter/Android Gradle Plugin non supportano più out-of-the-box.
+> 🍴 **This is an unofficial fork of [RIP-Comm/sossoldi](https://github.com/RIP-Comm/sossoldi)**, with the specific goal of getting the app to build and run on old 32-bit (armeabi-v7a) Android devices, such as tablets running Android 7.x (API 24) that modern versions of Flutter/Android Gradle Plugin no longer support out of the box.
 
-Tutto il merito del progetto e del codice originale va al team [RIP-Comm](https://github.com/RIP-Comm). Questo fork non è affiliato né sponsorizzato da loro: è mantenuto per uso personale da [@daddie2](https://github.com/daddie2) e condiviso nel caso possa servire ad altri con lo stesso problema (vecchi tablet Android a 32 bit).
+All credit for the project and the original code goes to the [RIP-Comm](https://github.com/RIP-Comm) team. This fork is not affiliated with or endorsed by them: it is maintained for personal use by [@daddie2](https://github.com/daddie2) and shared in case it helps others with the same problem (old 32-bit Android tablets).
 
-## Perché questo fork esiste
+## Why this fork exists
 
-Il progetto originale, con le versioni recenti di Flutter/Kotlin/AGP che usa, non compila più direttamente per dispositivi Android 7 a 32 bit senza alcuni aggiustamenti:
+The original project, with the recent versions of Flutter/Kotlin/AGP it uses, no longer builds directly for 32-bit Android 7 devices without some adjustments:
 
-- `minSdkVersion` di default troppo alto per API 24;
-- `font_awesome_flutter` in una versione incompatibile con Flutter recente (`IconData` è diventata una classe `final`);
-- percorso di salvataggio CSV che si affida al Storage Access Framework, spesso rotto su Android ≤29 / ROM non ufficiali;
-- necessità di forzare esplicitamente `--target-platform android-arm` per ottenere un APK a 32 bit.
+- default `minSdkVersion` too high for API 24;
+- `font_awesome_flutter` in a version incompatible with recent Flutter (`IconData` has become a `final` class);
+- CSV save path relying on the Storage Access Framework, which is often broken on Android ≤29 / unofficial ROMs;
+- the need to explicitly force `--target-platform android-arm` to get a 32-bit APK.
 
-Questo fork include le patch necessarie e gli script per applicarle automaticamente.
+This fork includes the necessary patches and scripts to apply them automatically.
 
-## Cosa contengono gli script
+## What the scripts contain
 
-- **`patch_sossoldi.ps1`** — applica in modo idempotente le patch sopra elencate al codice sorgente.
-- **`update_sossoldi.bat`** — orchestratore: `git pull`, applica le patch, `flutter pub get`, rigenera il codice (`build_runner`), compila l'APK a 32 bit, fa un backup dei dati dal tablet (`adb backup`), installa il nuovo APK (`adb install`) e infine sincronizza (commit + push) le modifiche su questo repository.
+- **`patch_sossoldi.ps1`** — idempotently applies the patches listed above to the source code.
+- **`update_sossoldi.bat`** — orchestrator: `git pull`, applies the patches, `flutter pub get`, regenerates the code (`build_runner`), builds the 32-bit APK, backs up data from the tablet (`adb backup`), installs the new APK (`adb install`), and finally syncs (commit + push) the changes to this repository.
 
 ## Download
 
-Se non vuoi compilare tu stesso l'APK, controlla la sezione [Releases](../../releases) di questo repository: quando disponibile, troverai lì l'ultimo APK pronto per il sideload su tablet Android 7+ a 32 bit.
+If you don't want to build the APK yourself, check the [Releases](../../releases) section of this repository: when available, you'll find the latest APK there, ready for sideloading on 32-bit Android 7+ tablets.
 
-> ⚠️ L'APK è firmato con un keystore personale, non con quello ufficiale di Sossoldi: se hai già l'app originale installata (Play Store/F-Droid/App Store ufficiale), questa versione va installata come app separata o dovrai disinstallare quella originale prima, perché le firme diverse impediscono l'aggiornamento diretto.
+> ⚠️ The APK is signed with a personal keystore, not the official Sossoldi one: if you already have the original app installed (Play Store/F-Droid/official App Store), this version must be installed as a separate app, or you'll need to uninstall the original one first, since the different signatures prevent a direct update.
 
-## Prerequisiti (per compilare da sorgente)
+## Prerequisites (to build from source)
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install/windows) installato e nel `PATH`.
-- Android Studio con Android SDK, Platform Tools e NDK installati.
-- **Un JDK 17** dedicato (es. [Eclipse Temurin 17](https://adoptium.net/temurin/releases/?version=17)):
+- [Flutter SDK](https://docs.flutter.dev/get-started/install/windows) installed and in your `PATH`.
+- Android Studio with Android SDK, Platform Tools, and NDK installed.
+- **A dedicated JDK 17** (e.g. [Eclipse Temurin 17](https://adoptium.net/temurin/releases/?version=17)):
   ```
-  flutter config --jdk-dir="C:\Percorso\jdk-17.x.x-hotspot"
+  flutter config --jdk-dir="C:\Path\to\jdk-17.x.x-hotspot"
   ```
-- Un keystore Android personale per la firma della release (vedi sotto).
-- `adb` nel `PATH` e debug USB attivo sul tablet, per i passaggi di backup/installazione automatica.
+- A personal Android keystore for signing the release build (see below).
+- `adb` in your `PATH` and USB debugging enabled on the tablet, for the automatic backup/install steps.
 
-## Come si usa
+## How to use it
 
-1. Clona questo repository:
+1. Clone this repository:
    ```
    git clone https://github.com/daddie2/sossoldi-32-bit.git
    ```
-2. **Crea un tuo keystore** (una tantum) e il relativo `android/key.properties` — **non è incluso in questo repository e non va mai committato**:
+2. **Create your own keystore** (one-time setup) and the corresponding `android/key.properties` — **not included in this repository and should never be committed**:
    ```
    keytool -genkey -v -keystore android\app\sossoldi-release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias sossoldi
    ```
-   poi crea `android/key.properties` con:
+   then create `android/key.properties` with:
    ```
-   storePassword=<tua password>
-   keyPassword=<tua password>
+   storePassword=<your password>
+   keyPassword=<your password>
    keyAlias=sossoldi
    storeFile=sossoldi-release-key.jks
    ```
-3. Lancia `update_sossoldi.bat` dalla cartella del progetto. L'APK finale sarà in `build\app\outputs\flutter-apk\app-default-release.apk`.
+3. Run `update_sossoldi.bat` from the project folder. The final APK will be in `build\app\outputs\flutter-apk\app-default-release.apk`.
 
-## Sicurezza
+## Security
 
-- `android/key.properties` e i file `.jks`/`.keystore` contengono le credenziali per firmare l'app: **non vanno mai committati** (sono esclusi via `.gitignore`).
-- Gli APK pubblicati nelle Release sono firmati ma **non contengono dati personali**: sono binari compilati dal solo codice sorgente pubblico di questo repository, senza chiavi API o credenziali incorporate.
+- `android/key.properties` and the `.jks`/`.keystore` files contain the credentials used to sign the app: **they must never be committed** (they are excluded via `.gitignore`).
+- The APKs published in the Releases are signed but **contain no personal data**: they are binaries built solely from this repository's public source code, with no API keys or credentials embedded.
 
-## Licenza
+## License
 
-Come il progetto originale, questo fork è distribuito sotto licenza MIT (vedi `LICENSE`).
+Like the original project, this fork is distributed under the MIT license (see `LICENSE`).

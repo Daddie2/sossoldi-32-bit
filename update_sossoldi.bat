@@ -17,11 +17,26 @@ set PUSHED=0
 
 if exist .git (
     echo [1/10] Aggiorno il codice da GitHub ^(git pull^)...
-    git pull
+    for /f "delims=" %%O in ('git pull 2^>^&1') do (
+        echo %%O
+        set "PULL_OUTPUT=!PULL_OUTPUT! %%O"
+    )
     if errorlevel 1 (
         echo ERRORE durante git pull. Controlla eventuali conflitti e riprova.
         pause
         exit /b 1
+    )
+
+    echo !PULL_OUTPUT! | findstr /i /c:"Already up to date" /c:"up-to-date" >nul
+    if not errorlevel 1 (
+        echo.
+        echo Nessun aggiornamento trovato sul repository originale.
+        set /p CONTINUE_CHOICE="Vuoi continuare comunque con build/installazione/release? (S/n): "
+        if /i "!CONTINUE_CHOICE!"=="n" (
+            echo Operazione annullata dall'utente.
+            pause
+            exit /b 0
+        )
     )
 ) else (
     echo [1/10] Nessuna cartella .git trovata, salto git pull.
@@ -103,7 +118,10 @@ if "%DO_INSTALL%"=="1" (
 echo.
 
 echo [9/10] Sincronizzo le modifiche con il tuo repository GitHub...
-if not exist .git (
+set /p GITHUB_CHOICE="Vuoi caricare le modifiche su GitHub (commit + push + release)? (S/n): "
+if /i "!GITHUB_CHOICE!"=="n" (
+    echo Salto la sincronizzazione con GitHub su richiesta dell'utente.
+) else if not exist .git (
     echo Nessuna cartella .git trovata, salto la sincronizzazione.
 ) else (
     git add -A
@@ -129,7 +147,9 @@ if not exist .git (
 echo.
 
 echo [10/10] Pubblico la release con l'APK su GitHub...
-if not defined GITHUB_TOKEN (
+if /i "!GITHUB_CHOICE!"=="n" (
+    echo Salto la creazione della release ^(hai scelto di non caricare su GitHub^).
+) else if not defined GITHUB_TOKEN (
     echo ATTENZIONE: variabile d'ambiente GITHUB_TOKEN non impostata, salto la creazione della release.
     echo             Impostala una tantum con: setx GITHUB_TOKEN "il-tuo-personal-access-token"
     echo             ^(poi riapri questo terminale/riavvia il bat^)
