@@ -2,13 +2,13 @@
 setlocal enabledelayedexpansion
 
 echo ===============================================
-echo   Sossoldi - aggiornamento per tablet Android 7
+echo   Sossoldi - update for Android 7 tablet
 echo ===============================================
 echo.
 
 if not exist pubspec.yaml (
-    echo ERRORE: lancia questo file dalla cartella radice del progetto Sossoldi
-    echo         ^(quella dove si trova pubspec.yaml^).
+    echo ERROR: run this file from the root folder of the Sossoldi project
+    echo        ^(the one containing pubspec.yaml^).
     pause
     exit /b 1
 )
@@ -16,129 +16,176 @@ if not exist pubspec.yaml (
 set PUSHED=0
 
 if exist .git (
-    echo [1/10] Aggiorno il codice da GitHub ^(git pull^)...
-    for /f "delims=" %%O in ('git pull 2^>^&1') do (
-        echo %%O
-        set "PULL_OUTPUT=!PULL_OUTPUT! %%O"
-    )
+    echo [1/10] Checking for updates from the original project ^(upstream RIP-Comm/sossoldi^)...
+
+    git remote get-url upstream >nul 2>&1
     if errorlevel 1 (
-        echo ERRORE durante git pull. Controlla eventuali conflitti e riprova.
+        echo Adding the 'upstream' remote -^> https://github.com/RIP-Comm/sossoldi.git
+        git remote add upstream https://github.com/RIP-Comm/sossoldi.git
+    )
+
+    echo Fetching the latest refs from upstream...
+    git fetch upstream
+    if errorlevel 1 (
+        echo ERROR while running git fetch upstream. Check your connection and try again.
         pause
         exit /b 1
     )
 
-    echo !PULL_OUTPUT! | findstr /i /c:"Already up to date" /c:"up-to-date" >nul
+    set "MERGE_OUTPUT="
+    for /f "delims=" %%O in ('git merge upstream/main --no-edit 2^>^&1') do (
+        echo %%O
+        set "MERGE_OUTPUT=!MERGE_OUTPUT! %%O"
+    )
+    if errorlevel 1 (
+        echo.
+        echo ===============================================
+        echo   CONFLICT while merging the updates
+        echo ===============================================
+        echo.
+        echo The original project has changed some files that you also
+        echo changed ^(most likely through the patches^), so Git could not
+        echo merge the two versions automatically.
+        echo.
+        echo Files in conflict:
+        git diff --name-only --diff-filter=U
+        echo.
+        echo How to fix it, step by step:
+        echo   1. Open each file listed above in a text editor.
+        echo   2. Look for blocks marked with these separators:
+        echo        ^<^<^<^<^<^<^< HEAD                  ^(your version^)
+        echo        ^=^=^=^=^=^=^=
+        echo        ^>^>^>^>^>^>^> upstream/main         ^(the original version^)
+        echo   3. Decide which part to keep ^(or merge both by hand^),
+        echo      then delete the markers and save the file.
+        echo   4. Once ALL conflicted files are fixed, run:
+        echo        git add -A
+        echo        git commit -m "Merge upstream, resolved conflicts"
+        echo   5. Re-run this script ^(update_sossoldi.bat^) to continue
+        echo      with patching, building and installing.
+        echo.
+        echo Alternatively, to cancel the merge and go back:
+        echo        git merge --abort
+        echo.
+        pause
+        exit /b 1
+    )
+
+    echo !MERGE_OUTPUT! | findstr /i /c:"Already up to date" /c:"up-to-date" >nul
     if not errorlevel 1 (
         echo.
-        echo Nessun aggiornamento trovato sul repository originale.
-        set /p CONTINUE_CHOICE="Vuoi continuare comunque con build/installazione/release? (S/n): "
+        echo No updates found on the original RIP-Comm/sossoldi project.
+        set /p CONTINUE_CHOICE="Do you want to continue anyway with build/install/release? (Y/n): "
         if /i "!CONTINUE_CHOICE!"=="n" (
-            echo Operazione annullata dall'utente.
+            echo Operation cancelled by the user.
             pause
             exit /b 0
         )
+    ) else (
+        echo.
+        echo Updates found in the original project: merged into your local fork.
     )
 ) else (
-    echo [1/10] Nessuna cartella .git trovata, salto git pull.
+    echo [1/10] No .git folder found, skipping update check.
 )
 echo.
 
-echo [2/10] Applico le patch necessarie...
+echo [2/10] Applying the required patches...
 powershell -NoProfile -ExecutionPolicy Bypass -File patch_sossoldi.ps1
 if errorlevel 1 (
-    echo ERRORE durante l'applicazione delle patch.
+    echo ERROR while applying the patches.
     pause
     exit /b 1
 )
 echo.
 
-echo [3/10] Scarico le dipendenze Flutter...
+echo [3/10] Fetching Flutter dependencies...
 call flutter pub get
 if errorlevel 1 (
-    echo ERRORE durante flutter pub get.
+    echo ERROR while running flutter pub get.
     pause
     exit /b 1
 )
 echo.
 
-echo [4/10] Genero il codice ^(provider Riverpod, freezed, json_serializable^)...
+echo [4/10] Generating code ^(Riverpod providers, freezed, json_serializable^)...
 call dart run build_runner build --delete-conflicting-outputs
 if errorlevel 1 (
-    echo ERRORE durante la generazione del codice.
+    echo ERROR while generating code.
     pause
     exit /b 1
 )
 echo.
 
-echo [5/10] Compilo l'APK ^(32-bit, per il tablet, flavor default^)...
+echo [5/10] Building the APK ^(32-bit, for the tablet, default flavor^)...
 call flutter build apk --release --target-platform android-arm --flavor default --android-skip-build-dependency-validation
 if errorlevel 1 (
-    echo ERRORE durante la build.
+    echo ERROR during the build.
     pause
     exit /b 1
 )
 echo.
 
-echo [6/10] Verifico se il tablet e' collegato...
+echo [6/10] Checking whether the tablet is connected...
 set DO_INSTALL=1
 adb devices | findstr /r /c:"device$" >nul
 if errorlevel 1 (
-    echo Nessun dispositivo Android rilevato via adb.
-    set /p INSTALL_CHOICE="Vuoi comunque provare backup e installazione sul tablet? (s/N): "
-    if /i not "!INSTALL_CHOICE!"=="s" (
-        echo Salto backup e installazione: procedo solo con la sincronizzazione su GitHub.
+    echo No Android device detected via adb.
+    set /p INSTALL_CHOICE="Do you want to try backup and installation on the tablet anyway? (y/N): "
+    if /i not "!INSTALL_CHOICE!"=="y" (
+        echo Skipping backup and installation: proceeding only with GitHub sync.
         set DO_INSTALL=0
     )
 )
 echo.
 
 if "%DO_INSTALL%"=="1" (
-    echo [7/10] Backup dei dati dal tablet...
-    echo       ^(sul tablet potrebbe apparire una richiesta di conferma: sblocca e conferma^)
+    echo [7/10] Backing up data from the tablet...
+    echo       ^(a confirmation prompt may appear on the tablet: unlock it and confirm^)
     adb backup -f sossoldi_backup.ab com.ripster.sossoldi
     if errorlevel 1 (
-        echo ATTENZIONE: il backup non e' andato a buon fine. Continuo comunque con l'installazione,
-        echo             ma senza una rete di sicurezza per questo aggiornamento.
+        echo WARNING: the backup did not succeed. Continuing with the installation anyway,
+        echo          but without a safety net for this update.
     ) else (
-        echo Backup salvato in sossoldi_backup.ab ^(nella cartella del progetto^)
+        echo Backup saved to sossoldi_backup.ab ^(in the project folder^)
     )
     echo.
 
-    echo [8/10] Installo sul tablet via adb...
-    echo       ^(assicurati che il tablet sia collegato con debug USB attivo^)
+    echo [8/10] Installing on the tablet via adb...
+    echo       ^(make sure the tablet is connected with USB debugging enabled^)
     adb install -r build\app\outputs\flutter-apk\app-default-release.apk
     if errorlevel 1 (
-        echo ATTENZIONE: installazione non riuscita. Il tablet e' collegato e sbloccato?
-        echo             L'APK resta comunque disponibile in build\app\outputs\flutter-apk\
-        echo             Procedo con la sincronizzazione su GitHub.
+        echo WARNING: installation failed. Is the tablet connected and unlocked?
+        echo          The APK is still available at build\app\outputs\flutter-apk\
+        echo          Proceeding with GitHub sync.
     )
 ) else (
-    echo [7-8/10] Backup e installazione saltati ^(nessun tablet collegato^).
+    echo [7-8/10] Backup and installation skipped ^(no tablet connected^).
 )
 echo.
 
-echo [9/10] Sincronizzo le modifiche con il tuo repository GitHub...
-set /p GITHUB_CHOICE="Vuoi caricare le modifiche su GitHub (commit + push + release)? (S/n): "
+echo [9/10] Syncing changes with your GitHub repository...
+set /p GITHUB_CHOICE="Do you want to upload the changes to GitHub (commit + push + release)? (Y/n): "
 if /i "!GITHUB_CHOICE!"=="n" (
-    echo Salto la sincronizzazione con GitHub su richiesta dell'utente.
+    echo Skipping GitHub sync at the user's request.
 ) else if not exist .git (
-    echo Nessuna cartella .git trovata, salto la sincronizzazione.
+    echo No .git folder found, skipping sync.
 ) else (
     git add -A
     git diff --cached --quiet
     if not errorlevel 1 (
-        echo Nessuna modifica da sincronizzare.
+        echo No changes to sync.
     ) else (
-        git commit -m "Aggiornamento automatico del %date% alle %time%"
+        git commit -m "Automated update on %date% at %time%"
         if errorlevel 1 (
-            echo ATTENZIONE: commit non riuscito, salto il push.
+            echo WARNING: commit failed, skipping push.
         ) else (
             git push origin main
             if errorlevel 1 (
-                echo ATTENZIONE: push non riuscito. Controlla la connessione o l'autenticazione GitHub
-                echo             ^(potrebbe servire rifare 'gh auth login' o generare un nuovo token^).
+                echo WARNING: push failed. Check your connection or GitHub authentication
+                echo          ^(you may need to run 'gh auth login' again or generate a new token^).
             ) else (
-                echo Modifiche pubblicate su GitHub.
+                echo Changes published to GitHub.
                 set PUSHED=1
             )
         )
@@ -146,26 +193,26 @@ if /i "!GITHUB_CHOICE!"=="n" (
 )
 echo.
 
-echo [10/10] Pubblico la release con l'APK su GitHub...
+echo [10/10] Publishing the release with the APK on GitHub...
 if /i "!GITHUB_CHOICE!"=="n" (
-    echo Salto la creazione della release ^(hai scelto di non caricare su GitHub^).
+    echo Skipping release creation ^(you chose not to upload to GitHub^).
 ) else if not defined GITHUB_TOKEN (
-    echo ATTENZIONE: variabile d'ambiente GITHUB_TOKEN non impostata, salto la creazione della release.
-    echo             Impostala una tantum con: setx GITHUB_TOKEN "il-tuo-personal-access-token"
-    echo             ^(poi riapri questo terminale/riavvia il bat^)
+    echo WARNING: the GITHUB_TOKEN environment variable is not set, skipping release creation.
+    echo          Set it once with: setx GITHUB_TOKEN "your-personal-access-token"
+    echo          ^(then reopen this terminal / restart the bat file^)
 ) else (
     powershell -NoProfile -ExecutionPolicy Bypass -File create_github_release.ps1
     if errorlevel 1 (
-        echo ATTENZIONE: creazione della release fallita. Controlla il token e il remote ^(git remote -v^).
+        echo WARNING: release creation failed. Check the token and the remote ^(git remote -v^).
     )
 )
 
 echo.
 echo ===============================================
 if "%DO_INSTALL%"=="1" (
-    echo   Fatto! App aggiornata sul tablet.
+    echo   Done! App updated on the tablet.
 ) else (
-    echo   Fatto! APK compilato ^(nessun tablet collegato, installazione saltata^).
+    echo   Done! APK built ^(no tablet connected, installation skipped^).
 )
 echo ===============================================
 pause

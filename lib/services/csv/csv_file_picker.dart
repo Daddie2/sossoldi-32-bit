@@ -52,8 +52,8 @@ class CSVFilePicker {
   }
 
   // Share exported CSV file
-  // Chiede sempre la cartella tramite il selettore (SAF), anche su Android
-  // <=29 / ROM datate, invece di scrivere automaticamente in Download.
+  // Always asks for the folder via the picker (SAF), even on Android
+  // <=29 / older ROMs, instead of automatically writing to Download.
   static Future<void> saveCSVFile(String csv, BuildContext context) async {
     try {
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
